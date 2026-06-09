@@ -1,9 +1,12 @@
 """配置常量模块"""
 import os
+from typing import Iterable, List
 
-# 电量阈值
-THRESHOLD = 10.0  # 低电量警告阈值
-EXCELLENT_THRESHOLD = 100.0  # 充足电量阈值
+# 低电量警告阈值
+THRESHOLD = 10.0
+
+# 充足电量阈值
+EXCELLENT_THRESHOLD = 100.0
 
 # 文件路径
 DATA_DIR = "./page/data"
@@ -21,13 +24,23 @@ MAX_WAIT = 120
 # 时区
 TIMEZONE = "Asia/Shanghai"
 
-# ==================== 基础环境变量 ====================
+# 基础环境变量
 ACCOUNT = os.getenv("ACCOUNT")
 PASSWORD = os.getenv("PASSWORD")
-LIGHT_ROOM = os.getenv("LIGHT_ROOM")  # 照明电量房间号
-AC_ROOM = os.getenv("AC_ROOM")  # 空调电量房间号
 
-# ==================== 通知渠道配置 ====================
+# 照明电量房间号
+LIGHT_ROOM = os.getenv("LIGHT_ROOM")
+
+# 空调电量房间号
+AC_ROOM = os.getenv("AC_ROOM")
+
+# 统一认证 MFA 可信设备 ID，可选；不填使用 ZZU.Py 默认值。
+ZZU_DEVICE_ID = os.getenv("ZZU_DEVICE_ID")
+
+# tokens.enc 独立加密密钥，可选；不填兼容使用 PASSWORD。
+TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
+
+# 通知渠道配置
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -42,21 +55,26 @@ SMTP_CODE = os.getenv("SMTP_CODE")
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 
 # Bark (iOS)
-BARK_URL = os.getenv("BARK_URL")  # 可选，默认 https://api.day.app
+# 可选，默认 https://api.day.app。
+BARK_URL = os.getenv("BARK_URL")
 BARK_KEY = os.getenv("BARK_KEY")
 
 # 钉钉机器人
 DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK")
-DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")  # 可选，加签密钥
+# 可选，加签密钥。
+DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")
 
 # 飞书机器人
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
-FEISHU_SECRET = os.getenv("FEISHU_SECRET")  # 可选，加签密钥
+# 可选，加签密钥。
+FEISHU_SECRET = os.getenv("FEISHU_SECRET")
 
 # go-cqhttp
 GOCQHTTP_URL = os.getenv("GOCQHTTP_URL")
-GOCQHTTP_TOKEN = os.getenv("GOCQHTTP_TOKEN")  # 可选
-GOCQHTTP_TARGET = os.getenv("GOCQHTTP_TARGET")  # QQ号
+# 可选。
+GOCQHTTP_TOKEN = os.getenv("GOCQHTTP_TOKEN")
+# QQ 号。
+GOCQHTTP_TARGET = os.getenv("GOCQHTTP_TARGET")
 
 # Gotify
 GOTIFY_URL = os.getenv("GOTIFY_URL")
@@ -79,11 +97,13 @@ PUSHPLUS_TOKEN = os.getenv("PUSHPLUS_TOKEN")
 WECOM_CORP_ID = os.getenv("WECOM_CORP_ID")
 WECOM_AGENT_ID = os.getenv("WECOM_AGENT_ID")
 WECOM_SECRET = os.getenv("WECOM_SECRET")
-WECOM_TOUSER = os.getenv("WECOM_TOUSER")  # 可选，默认 @all
+# 可选，默认 @all。
+WECOM_TOUSER = os.getenv("WECOM_TOUSER")
 
 # Qmsg酱
 QMSG_KEY = os.getenv("QMSG_KEY")
-QMSG_QQ = os.getenv("QMSG_QQ")  # 可选
+# 可选。
+QMSG_QQ = os.getenv("QMSG_QQ")
 
 # 智能微秘书 (Aibotk)
 AIBOTK_KEY = os.getenv("AIBOTK_KEY")
@@ -94,16 +114,28 @@ PUSHME_KEY = os.getenv("PUSHME_KEY")
 
 # Chronocat
 CHRONOCAT_URL = os.getenv("CHRONOCAT_URL")
-CHRONOCAT_TOKEN = os.getenv("CHRONOCAT_TOKEN")  # 可选
-CHRONOCAT_TARGET = os.getenv("CHRONOCAT_TARGET")  # QQ号
+# 可选。
+CHRONOCAT_TOKEN = os.getenv("CHRONOCAT_TOKEN")
+# QQ 号。
+CHRONOCAT_TARGET = os.getenv("CHRONOCAT_TARGET")
 
 # ntfy
-NTFY_URL = os.getenv("NTFY_URL")  # 可选，默认 https://ntfy.sh
+# 可选，默认 https://ntfy.sh。
+NTFY_URL = os.getenv("NTFY_URL")
 NTFY_TOPIC = os.getenv("NTFY_TOPIC")
-NTFY_TOKEN = os.getenv("NTFY_TOKEN")  # 可选
+# 可选。
+NTFY_TOKEN = os.getenv("NTFY_TOKEN")
 
 # 自定义 Webhook
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-WEBHOOK_METHOD = os.getenv("WEBHOOK_METHOD")  # 可选，默认 POST
-WEBHOOK_HEADERS = os.getenv("WEBHOOK_HEADERS")  # 可选，JSON 格式
-WEBHOOK_BODY_TEMPLATE = os.getenv("WEBHOOK_BODY_TEMPLATE")  # 可选，支持 {{title}} {{content}}
+# 可选，默认 POST。
+WEBHOOK_METHOD = os.getenv("WEBHOOK_METHOD")
+# 可选，JSON 格式。
+WEBHOOK_HEADERS = os.getenv("WEBHOOK_HEADERS")
+# 可选，支持 {{title}} 和 {{content}}。
+WEBHOOK_BODY_TEMPLATE = os.getenv("WEBHOOK_BODY_TEMPLATE")
+
+
+def get_missing_required_env(names: Iterable[str]) -> List[str]:
+    """返回缺失的必需环境变量名，不输出任何变量值。"""
+    return [name for name in names if not os.getenv(name)]

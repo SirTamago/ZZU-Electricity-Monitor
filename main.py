@@ -1,18 +1,11 @@
-"""
-ZZU 宿舍电量监控 - 主入口
-
-功能:
-1. 获取宿舍电量信息
-2. 记录电量数据
-3. 发送通知
-"""
+"""主程序入口，负责获取电量、发送通知并写入历史数据。"""
 import logging
 import os
 import sys
 import threading
 import time
 
-from config import ACCOUNT, PASSWORD, LIGHT_ROOM, AC_ROOM
+from config import get_missing_required_env
 from monitor import EnergyMonitor
 from storage import record_energy_data, update_time_list, update_last_records
 from notify import notify
@@ -35,12 +28,12 @@ def get_cst_time_str(format_str: str) -> str:
 
 
 def main():
-    """主函数"""
+    """执行一次电量监控任务。"""
     logger.info("启动宿舍电量监控程序...")
 
     # 检查必要的环境变量
     required_env_vars = ["ACCOUNT", "PASSWORD", "LIGHT_ROOM", "AC_ROOM"]
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+    missing_vars = get_missing_required_env(required_env_vars)
     if missing_vars:
         logger.error(f"缺少必要的环境变量: {', '.join(missing_vars)}")
         sys.exit(1)

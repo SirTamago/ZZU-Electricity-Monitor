@@ -1,14 +1,20 @@
+"""GitHub Actions Step Summary 生成脚本。"""
 import json
 
-def load_data_from_json(file_path: str) -> list[dict] | None:
+
+def load_data_from_json(file_path: str) -> list[dict]:
+    """从 JSON 文件读取列表数据；读取失败时返回空列表。"""
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             return json.load(file)
     except FileNotFoundError:
-        return []  # 如果文件不存在，返回空列表
+        # 文件不存在时返回空列表。
+        return []
     except json.JSONDecodeError:
-        return []  # 如果文件内容无法解析为 JSON，返回空列表
-        
+        # 文件内容无法解析时返回空列表。
+        return []
+
+
 MD_TEMPLATE = '''
 ## Balance Record
 | **剩余电费** | **照明房间** | **空调房间** |

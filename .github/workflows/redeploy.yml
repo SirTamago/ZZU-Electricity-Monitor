@@ -4,11 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 concurrency:
-  group: "pages"
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -19,46 +17,68 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: write
-      id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Clone page branch
         run: |
-          # 克隆 page 分支（仅克隆最新版本）
-          git clone --depth=1 --branch=page https://github.com/${{ github.repository }}.git /tmp/repo
-          # 复制 data 文件夹内容到目标目录
-          cp -r /tmp/repo/data/* ./page/data/
-          # 清理临时文件
-          rm -rf /tmp/repo
+          # 检查 page 分支是否存在
+          if git ls-remote --heads https://github.com/${{ github.repository }}.git page | grep -q page; then
+            echo "发现 page 分支，正在克隆..."
+            git clone --depth=1 --branch=page https://github.com/${{ github.repository }}.git /tmp/repo
+            if [ -d "/tmp/repo/data" ]; then
+              mkdir -p ./page/data
+              shopt -s dotglob nullglob
+              for item in /tmp/repo/data/*; do
+                if [ "$(basename "$item")" = "rooms" ]; then
+                  continue
+                fi
+                cp -r "$item" ./page/data/
+              done
+              echo "已复制 page 分支的 data 文件夹内容"
+            else
+              echo "page 分支中未找到 data 文件夹"
+            fi
+            rm -rf /tmp/repo
+          else
+            echo "page 分支不存在，跳过克隆步骤"
+          fi
 
       - name: git config
+        if: github.ref == 'refs/heads/main'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Commit changes
+        if: github.ref == 'refs/heads/main'
         run: |
           mkdir pages
-          cp -r ./page/data ./page/favicon.ico ./page/index.html ./page/style.css ./page/README.md pages/
+          cp -r ./page/data ./page/favicon.ico ./page/index.html ./page/style.css ./page/main.js pages/
+          rm -f pages/data/tokens.json
           cd pages
           git init
           git add .
           git commit -m "🔄 $(date +"%Y年%m月%d日-%H时%M分") 重新部署"
           git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:page
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Remove auth files from workspace and Pages artifact
+        if: always()
+        run: |
+          rm -f ./page/data/tokens.json ./page/data/tokens.enc
 
       - name: Upload artifact
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: './page'
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: redeploy
     permissions:
       pages: write

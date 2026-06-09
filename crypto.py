@@ -1,8 +1,4 @@
-"""
-AES-256-GCM 加密模块
-
-用于安全存储 tokens.json 文件
-"""
+"""认证 token 加密模块，负责 tokens.json 与 tokens.enc 的转换。"""
 import os
 import sys
 import base64
@@ -10,22 +6,26 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 
-from config import TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD
+from config import TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD, TOKEN_ENCRYPTION_KEY
 
 # 固定盐值（用于密钥派生）
 SALT = b"ZZU-Electricity-Monitor-Salt-v1"
 ITERATIONS = 100000
 
 
+def get_encryption_secret() -> str:
+    """优先使用独立 token 加密密钥，未配置时兼容旧版 PASSWORD。"""
+    return TOKEN_ENCRYPTION_KEY or PASSWORD
+
+
 def derive_key(password: str) -> bytes:
-    """
-    使用 PBKDF2 从密码派生 256 位密钥
+    """使用 PBKDF2 从密码派生 256 位密钥。
 
-    Args:
-        password: 用户密码
+    参数：
+        password: 加密密钥原文。
 
-    Returns:
-        32 字节的密钥
+    返回：
+        32 字节密钥。
     """
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -37,16 +37,15 @@ def derive_key(password: str) -> bytes:
 
 
 def encrypt_file(input_path: str, output_path: str, password: str) -> bool:
-    """
-    使用 AES-256-GCM 加密文件
+    """使用 AES-256-GCM 加密文件。
 
-    Args:
-        input_path: 输入文件路径
-        output_path: 输出文件路径
-        password: 加密密码
+    参数：
+        input_path: 输入文件路径。
+        output_path: 输出文件路径。
+        password: 加密密钥原文。
 
-    Returns:
-        是否成功
+    返回：
+        是否加密成功。
     """
     try:
         # 派生密钥
@@ -80,16 +79,15 @@ def encrypt_file(input_path: str, output_path: str, password: str) -> bool:
 
 
 def decrypt_file(input_path: str, output_path: str, password: str) -> bool:
-    """
-    使用 AES-256-GCM 解密文件
+    """使用 AES-256-GCM 解密文件。
 
-    Args:
-        input_path: 加密文件路径
-        output_path: 输出文件路径
-        password: 解密密码
+    参数：
+        input_path: 加密文件路径。
+        output_path: 输出文件路径。
+        password: 解密密钥原文。
 
-    Returns:
-        是否成功
+    返回：
+        是否解密成功。
     """
     try:
         # 读取加密数据
@@ -130,22 +128,23 @@ def main():
 
     command = sys.argv[1].lower()
 
-    if not PASSWORD:
-        print("❌ 未设置 PASSWORD 环境变量")
+    encryption_secret = get_encryption_secret()
+    if not encryption_secret:
+        print("❌ 未设置 TOKEN_ENCRYPTION_KEY 或 PASSWORD 环境变量")
         sys.exit(1)
 
     if command == "encrypt":
         if not os.path.exists(TOKEN_FILE):
             print(f"⚠️ 文件不存在: {TOKEN_FILE}")
             sys.exit(0)
-        success = encrypt_file(TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD)
+        success = encrypt_file(TOKEN_FILE, TOKEN_ENC_FILE, encryption_secret)
         sys.exit(0 if success else 1)
 
     elif command == "decrypt":
         if not os.path.exists(TOKEN_ENC_FILE):
             print(f"⚠️ 文件不存在: {TOKEN_ENC_FILE}")
             sys.exit(0)
-        success = decrypt_file(TOKEN_ENC_FILE, TOKEN_FILE, PASSWORD)
+        success = decrypt_file(TOKEN_ENC_FILE, TOKEN_FILE, encryption_secret)
         sys.exit(0 if success else 1)
 
     else:

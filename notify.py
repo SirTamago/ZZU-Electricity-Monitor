@@ -1,10 +1,4 @@
-"""
-通知模块 - 支持 20+ 通知渠道
-
-通知逻辑:
-- Telegram: 每次运行都发送
-- 其他渠道: 仅在电量低于阈值时发送
-"""
+"""通知模块，负责按电量状态分发日常通知和低电量报警。"""
 import json
 import logging
 import smtplib
@@ -98,16 +92,15 @@ def get_status(balance: float) -> str:
 def format_balance_report(
     light_balance: float, ac_balance: float, escape_markdown: bool = False
 ) -> str:
-    """
-    格式化电量报告
+    """格式化电量报告。
 
-    Args:
-        light_balance: 照明电量
-        ac_balance: 空调电量
-        escape_markdown: 是否转义 Markdown 特殊字符 (用于 Telegram)
+    参数：
+        light_balance: 照明电量。
+        ac_balance: 空调电量。
+        escape_markdown: 是否转义 Markdown 特殊字符，用于 Telegram。
 
-    Returns:
-        格式化的报告字符串
+    返回：
+        格式化后的报告字符串。
     """
     light_status = get_status(light_balance)
     ac_status = get_status(ac_balance)
@@ -130,7 +123,7 @@ def is_low_energy(balances: Dict[str, float]) -> bool:
     return balances["light_Balance"] <= THRESHOLD or balances["ac_Balance"] <= THRESHOLD
 
 
-# ==================== 通知渠道实现 ====================
+# 通知渠道实现
 
 
 @request_retry
@@ -587,7 +580,7 @@ def send_webhook(title: str, content: str) -> bool:
         raise requests.exceptions.RequestException(response.text)
 
 
-# ==================== 通知调度 ====================
+# 通知调度
 
 # 所有通知渠道 (除 Telegram 外)
 ALERT_CHANNELS: list[tuple[str, Callable[[str, str], bool]]] = [
@@ -613,12 +606,11 @@ ALERT_CHANNELS: list[tuple[str, Callable[[str, str], bool]]] = [
 
 
 def send_alert(title: str, content: str) -> None:
-    """
-    发送报警通知 - 发送到所有渠道
+    """向所有已配置渠道发送报警通知。
 
-    Args:
-        title: 通知标题
-        content: 通知内容 (普通文本格式)
+    参数：
+        title: 通知标题。
+        content: 普通文本格式的通知内容。
     """
     logger.info("发送报警通知到所有渠道...")
 
@@ -638,12 +630,11 @@ def send_alert(title: str, content: str) -> None:
 
 
 def send_daily(title: str, content: str) -> None:
-    """
-    发送日常通知 - 仅发送到 Telegram
+    """向 Telegram 发送日常通知。
 
-    Args:
-        title: 通知标题
-        content: 通知内容 (普通文本格式)
+    参数：
+        title: 通知标题。
+        content: 普通文本格式的通知内容。
     """
     logger.info("发送日常通知到 Telegram...")
     try:
@@ -654,11 +645,10 @@ def send_daily(title: str, content: str) -> None:
 
 
 def notify(balances: Dict[str, float]) -> None:
-    """
-    根据电量状态发送通知
+    """根据电量状态发送通知。
 
-    Args:
-        balances: 电量数据 {"light_Balance": float, "ac_Balance": float}
+    参数：
+        balances: 电量数据，包含 light_Balance 和 ac_Balance。
     """
     low_energy = is_low_energy(balances)
     title = "⚠️宿舍电量预警⚠️" if low_energy else "🏠宿舍电量通报🏠"

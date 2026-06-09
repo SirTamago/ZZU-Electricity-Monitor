@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install cryptography
+
+      - name: Python syntax check
+        run: |
+          python -m py_compile config.py monitor.py tokens.py mfa.py main.py crypto.py storage.py notify.py markdown.py tests/test_auth_flow.py tests/test_workflow_guards.py tests/test_room_data_contract.py
+
+      - name: Unit tests
+        run: |
+          python -m unittest discover -s tests
+
+      - name: JavaScript syntax check
+        run: |
+          node --check page/main.js
+
+      - name: Check workflow safety
+        run: |
+          if grep -R -n -E \
+            -e 'pull_request_''target' \
+            -e 'permissions:[[:space:]]*write-all' \
+            -e 'actions:[[:space:]]*write' \
+            -e 'Mattraks/delete-workflow-''runs' \
+            -e 'gh-workflow-''keepalive' \
+            .github/workflows; then
+            echo "Unsafe workflow configuration was found"
+            exit 1
+          fi
+
+      - name: Validate room JSON shards
+        run: |
+          found=0
+          for file in page/data/rooms/*.json; do
+            [ -e "$file" ] || continue
+            found=1
+            python -m json.tool "$file" > /dev/null
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "No room JSON shards found"
+            exit 1
+          fi
+
+      - name: Check whitespace
+        run: |
+          git diff --check
+
+      - name: Check generated and auth files
+        run: |
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+          if find . -path ./.git -prune -o \( -name '*.pyc' -o -name tokens.json -o -name tokens.enc -o -name '.env' \) -print | grep -q .; then
+            echo "Generated, local env, or auth files were found"
+            find . -path ./.git -prune -o \( -name '*.pyc' -o -name tokens.json -o -name tokens.enc -o -name '.env' \) -print
+            exit 1
+          fi

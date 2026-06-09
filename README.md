@@ -2,14 +2,51 @@
 
 郑州大学宿舍电量监控系统
 
+当前版本：**3.0**
+
 ## 功能特性
 
 - 定时自动获取照明/空调电量
 - 低电量多渠道通知 (20+ 渠道)
 - 现代化前端，支持深色模式
 - 内置房间查询器，快速查找房间编号
+- 统一认证 MFA Token/可信设备方案，适配 GitHub Actions 非交互运行
 - AES-256-GCM 加密存储
 - GitHub Actions 全自动运行
+
+## 3.0 发布要点
+
+3.0 主要面向学校统一认证 MFA 变更、前端资源体积和上游可审查性：
+
+- **认证链路**：新增 `mfa.py`、`tokens.py`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，Actions 优先复用加密 token 与可信设备。
+- **失败闭合**：`tokens.enc` 存在但无法解密时，工作流会直接失败，避免静默回退到需要短信验证码的账密登录。
+- **前端资源**：移除内嵌大体积 `page/room.js`，改为 `page/data/rooms/*.json` 按区域懒加载。
+- **发布隔离**：工作流会在上传 Pages artifact 前移除 `tokens.json` 和 `tokens.enc`；只有 `main` 分支会写入 `page` 分支和部署 Pages。
+- **审查证据**：新增 CI 与单元测试，覆盖 MFA/token 关键路径、workflow 安全约束、房间 JSON 分片契约和前端语法。
+
+发布 3.0 前建议至少确认：
+
+```bash
+python -m py_compile config.py monitor.py tokens.py mfa.py main.py crypto.py storage.py notify.py markdown.py tests/test_auth_flow.py tests/test_workflow_guards.py tests/test_room_data_contract.py
+python -m unittest discover -s tests
+node --check page/main.js
+git diff --check
+```
+
+完整变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 3.0 最简教程
+
+已经会用本项目的用户，可以只按这一版做：
+
+1. 更新依赖到 3.0 代码后，在 GitHub Secrets 配置 `ACCOUNT`、`PASSWORD`、`LIGHT_ROOM`、`AC_ROOM`。
+2. 推荐额外配置 `TOKEN_ENCRYPTION_KEY`，并保持本地和 GitHub Secrets 一致；需要固定可信设备时再配置 `ZZU_DEVICE_ID`。
+3. 本地设置同一组环境变量后运行 `python mfa.py`，按提示输入短信验证码，生成 `page/data/tokens.json`。
+4. 运行 `python crypto.py encrypt`，生成 `page/data/tokens.enc`；不要提交 `tokens.json`。
+5. 将 `tokens.enc` 放到 `page` 分支的 `data/` 目录，用于后续 Actions 读取和刷新。
+6. GitHub Pages 选择 **GitHub Actions** 作为部署源，在 Actions 里手动运行 `Update`，正式发布选择 `main` 分支。
+
+上游维护者测试 3.0 时，可以手动运行 `Update` 并选择 `test` 分支。`test` 分支会跑认证和脚本，但不会写入 `page` 分支，也不会部署 Pages。
 
 ## 快速开始
 
@@ -27,6 +64,13 @@
 | `PASSWORD` | 统一认证密码 | 你的密码 |
 | `LIGHT_ROOM` | 照明电量房间号 | 使用内置房间查询器获取 |
 | `AC_ROOM` | 空调电量房间号 | 使用内置房间查询器获取 |
+
+可选配置：
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `ZZU_DEVICE_ID` | 统一认证 MFA 可信设备 ID，不填则使用 ZZU.Py 默认 deviceId | 已在安全中心设为可信的 deviceId |
+| `TOKEN_ENCRYPTION_KEY` | `tokens.enc` 独立加密密钥，不填则兼容使用 `PASSWORD` | 建议使用长随机字符串 |
 
 **获取房间号：**
 
@@ -69,7 +113,38 @@
 
 你也可以点击 **Run workflow** 手动触发运行。
 
-### 第五步：配置通知渠道（可选）
+上游维护者如果要先在 `test` 分支验证 Actions，可以在 Actions 页面手动运行 `Update` 并选择 `test` 分支。该分支会执行安装依赖、解密 token、运行脚本和重新加密等步骤，但发布步骤只允许 `main` 分支执行，因此不会推送 `page` 分支，也不会部署 GitHub Pages。正式发布时再在 `main` 分支运行即可。
+
+### 第五步：完成 MFA Token 初始化（推荐）
+
+学校统一认证在 2026-06-02 左右新增了手机号短信验证。项目已适配 `ZZU.Py >= 7.2.1` 的 MFA 流程，但 GitHub Actions 不能交互输入短信验证码。
+
+推荐做法：
+
+1. 在本地设置 `ACCOUNT`、`PASSWORD`，建议设置稳定的 `ZZU_DEVICE_ID` 和长随机 `TOKEN_ENCRYPTION_KEY`
+2. 运行 `python mfa.py`
+3. 按提示输入短信验证码，生成 `page/data/tokens.json`
+4. 运行 `python crypto.py encrypt` 生成 `page/data/tokens.enc`；如已设置 `TOKEN_ENCRYPTION_KEY`，后续 Actions 也必须使用同一个值
+5. 将设备在统一认证安全中心设置为可信设备
+6. 将同一个 `ZZU_DEVICE_ID` 和 `TOKEN_ENCRYPTION_KEY` 配置到 GitHub Secrets；如果本地不设置 `ZZU_DEVICE_ID`，Actions 也会使用 ZZU.Py 默认 deviceId
+
+首次启用 MFA 时，需要让工作流能读到 `tokens.enc`：
+
+- 推荐：将 `page/data/tokens.enc` 放到 `page` 分支的 `data/` 目录
+- 如果只维护自己的私有 fork，可以临时强制添加 `page/data/tokens.enc` 到 `main` 并手动运行一次工作流；公开仓库不建议这样做，因为删除后历史记录中仍会保留该认证材料
+- 不要提交 `page/data/tokens.json`
+
+`tokens.enc` 虽然是加密文件，但仍是个人认证材料，默认已被 `.gitignore` 忽略。公开仓库的 `page` 分支密文仍可能被他人下载，因此建议使用独立的高强度 `TOKEN_ENCRYPTION_KEY`，不要只依赖统一认证密码。上游维护时不要接收 fork PR 中的个人 `tokens.enc`。
+
+如果 `page` 分支中存在 `tokens.enc`，但 `TOKEN_ENCRYPTION_KEY` 或 `PASSWORD` 无法解密它，工作流会在解密步骤直接失败。此时请确认本地加密和 GitHub Secrets 使用的是同一个密钥，或重新运行 `python mfa.py` 与 `python crypto.py encrypt` 生成新的 `tokens.enc`。
+
+工作流会在上传 GitHub Pages artifact 前移除 `tokens.json` 和 `tokens.enc`，避免认证文件直接出现在部署出来的网站目录中；`page` 分支中的 `tokens.enc` 仅用于后续 Actions 读取和刷新。
+
+后续 Actions 会优先复用已加密保存的 token；如果 token 失效并回退到账密登录，而当前设备仍要求短信 MFA，脚本会停止并提示重新完成本地 MFA 初始化。
+
+GitHub Actions 每次 runner 机器可能不同，但 ZZU.Py 传给统一认证的 `deviceId` 是稳定的：不设置时默认为 `ZZU.Py`，设置后使用 `ZZU_DEVICE_ID`。学校认证系统是否真正放行可信设备仍以统一认证 MFA 判断结果为准。
+
+### 第六步：配置通知渠道（可选）
 
 至少配置一个通知渠道以接收电量提醒。推荐使用 Telegram，无发送次数限制。
 
@@ -262,22 +337,27 @@
 
 ```
 ZZU-Electricity-Monitor/
-├── main.py              # 主程序入口
-├── monitor.py           # 电量监控模块，负责获取电量数据
+├── main.py              # 主程序入口，获取电量、通知并写入数据
+├── mfa.py               # 本地 MFA 认证与 Token 初始化脚本
+├── monitor.py           # 电量监控模块，含 ZZU.Py CAS 登录流程
+├── tokens.py            # 统一认证 Token 文件读写模块
 ├── notify.py            # 通知模块，支持 20+ 通知渠道
 ├── storage.py           # 数据存储模块，管理电量历史记录
-├── crypto.py            # 加密模块，AES-256-GCM 加密
+├── crypto.py            # Token 文件加密模块，AES-256-GCM 加密
 ├── config.py            # 配置模块，环境变量读取
-├── markdown.py          # Markdown 报告生成
+├── markdown.py          # GitHub Actions Step Summary 生成
 ├── requirements.txt     # Python 依赖
+├── CHANGELOG.md         # 版本变更记录
 ├── .github/workflows/
-│   └── static.yml       # GitHub Actions 工作流
+│   ├── static.yml       # 定时/手动更新电量并发布 Pages
+│   ├── redeploy.yml     # 仅重新发布当前 page 数据
+│   └── ci.yml           # PR/主分支验证
 └── page/                # 前端页面
     ├── index.html       # 主页面，数据可视化
     ├── style.css        # 样式文件，支持深色模式
     ├── main.js          # 主要 JavaScript 逻辑
-    ├── room.js          # 房间查询器数据和功能
-    └── data/            # 电量数据（page 分支）
+    ├── data/rooms/      # 按区域拆分的房间查询器数据
+    └── data/            # 电量数据与 token 密文（page 分支持久化）
 ```
 
 ## 分支说明
@@ -285,19 +365,19 @@ ZZU-Electricity-Monitor/
 | 分支 | 用途 | 说明 |
 |------|------|------|
 | `main` | 源代码 | Python 后端、GitHub Actions 工作流、前端模板 |
-| `page` | 部署分支 | GitHub Pages 静态资源、电量数据、加密令牌 |
+| `page` | 持久化分支 | GitHub Pages 静态资源快照、电量数据、加密令牌 |
 
 **为什么分两个分支？**
 
 - **数据持久化**：电量数据存储在 `page` 分支，代码更新不会丢失历史数据
-- **独立部署**：前端资源与后端代码分离，GitHub Pages 直接部署 `page` 分支
-- **安全隔离**：加密的认证令牌 (`tokens.enc`) 仅存在于 `page` 分支
+- **独立部署**：前端资源与后端代码分离，`main` 分支工作流从 `page/` 上传 GitHub Pages artifact，并同步 `page` 分支作为持久化快照
+- **认证文件隔离**：加密令牌 (`tokens.enc`) 仅用于 `page` 分支持久化，部署到 Pages 前会从网站产物移除
 - **快速加载**：`page` 分支仅包含静态资源，访问速度更快
 
 ## 技术栈
 
 - **Python 3.14** - 主程序语言
-- **ZZU.Py** - 郑州大学统一认证 API 封装
+- **ZZU.Py >= 7.2.1** - 郑州大学统一认证 API 封装，支持 MFA
 - **ECharts 6.0** - 数据可视化图表
 - **GitHub Actions** - CI/CD 自动化
 - **GitHub Pages** - 静态页面托管
@@ -328,7 +408,7 @@ ZZU-Electricity-Monitor/
 
 常见原因及解决方法：
 
-1. **账号密码错误**：检查 `ACCOUNT` 和 `PASSWORD` 配置
+1. **账号密码或 MFA 问题**：检查 `ACCOUNT`、`PASSWORD`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，必要时重新运行 `python mfa.py`
 2. **房间号错误**：使用房间查询器重新获取正确的房间编号
 3. **网络问题**：GitHub Actions 偶尔会有网络波动，可以手动重新运行
 4. **page 分支不存在**：首次运行会自动创建，无需担心

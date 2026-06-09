@@ -572,6 +572,13 @@ function renderCharts(data, type = 'line') {
 // ==================== 数据加载 ====================
 async function fetchData(filepath) {
     const response = await fetch(filepath);
+    if (!response.ok) {
+        const error = new Error(`数据文件加载失败: ${filepath} (${response.status})`);
+        error.status = response.status;
+        error.filepath = filepath;
+        error.isMissingDataFile = response.status === 404;
+        throw error;
+    }
     return response.json();
 }
 
@@ -584,6 +591,11 @@ async function loadData() {
         renderCharts(rawData, currentChartType);
         showToast('数据加载成功', 'success');
     } catch (err) {
+        if (err.isMissingDataFile) {
+            console.info(err.message);
+            showToast('暂无电量数据，等待首次更新', 'info');
+            return;
+        }
         console.error('加载错误:', err);
         showToast('数据加载失败', 'error');
     }
@@ -1319,9 +1331,23 @@ exportBtn.addEventListener('click', async () => {
 // 动态加载脚本
 function loadScript(src) {
     return new Promise((resolve, reject) => {
+        const existingScript = document.querySelector(`script[src="${src}"]`);
+        if (existingScript) {
+            if (existingScript.dataset.loaded === 'true') {
+                resolve();
+                return;
+            }
+            existingScript.addEventListener('load', resolve, { once: true });
+            existingScript.addEventListener('error', reject, { once: true });
+            return;
+        }
+
         const script = document.createElement('script');
         script.src = src;
-        script.onload = resolve;
+        script.onload = () => {
+            script.dataset.loaded = 'true';
+            resolve();
+        };
         script.onerror = reject;
         document.head.appendChild(script);
     });
@@ -1381,10 +1407,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentLightRoomId = '';
     let currentAcRoomId = '';
+    const roomDataCache = new Map();
+
+    async function loadRoomData(areaId) {
+        if (!areaId) return null;
+        if (roomDataCache.has(areaId)) {
+            return roomDataCache.get(areaId);
+        }
+
+        const dataPromise = fetch(`./data/rooms/${areaId}.json`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load room data for area ${areaId}: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data || !data.buildings || typeof data.buildings !== 'object') {
+                    throw new Error(`Invalid room data for area ${areaId}`);
+                }
+                roomDataCache.set(areaId, data);
+                return data;
+            })
+            .catch(error => {
+                roomDataCache.delete(areaId);
+                throw error;
+            });
+        roomDataCache.set(areaId, dataPromise);
+        return dataPromise;
+    }
 
     // 区域选择变化
     if (areaSelect) {
-        areaSelect.addEventListener('change', function() {
+        areaSelect.addEventListener('change', async function() {
             const areaId = this.value;
 
             // 重置后续选择器
@@ -1398,8 +1453,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // 清空结果
             clearResults();
 
-            if (areaId && window.roomData && window.roomData[areaId]) {
-                const buildings = window.roomData[areaId].buildings;
+            if (areaId) {
+                buildingSelect.disabled = true;
+                buildingSelect.innerHTML = '<option value="">正在加载建筑...</option>';
+            }
+
+            try {
+                const areaData = await loadRoomData(areaId);
+                if (areaSelect.value !== areaId) return;
+                if (!areaData) {
+                    buildingSelect.innerHTML = '<option value="">请选择建筑</option>';
+                    buildingSelect.disabled = true;
+                    return;
+                }
+
+                const buildings = areaData.buildings;
+                buildingSelect.innerHTML = '<option value="">请选择建筑</option>';
+                buildingSelect.disabled = false;
                 // 对建筑名称按柳荷菊松顺序，然后按数字排序
                 const sortedBuildingNames = Object.keys(buildings).sort((a, b) => {
                     // 定义园区优先级：柳荷菊松
@@ -1434,6 +1504,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     option.textContent = buildingName;
                     buildingSelect.appendChild(option);
                 });
+            } catch (error) {
+                if (areaSelect.value !== areaId) return;
+                console.error('房间数据加载失败:', error);
+                buildingSelect.innerHTML = '<option value="">房间数据加载失败</option>';
+                buildingSelect.disabled = true;
+                unitSelect.innerHTML = '<option value="">请选择单元</option>';
+                unitSelect.disabled = true;
+                roomSelect.innerHTML = '<option value="">请选择房间</option>';
+                roomSelect.disabled = true;
+                showToast('房间数据加载失败，请稍后重试', 'error');
             }
         });
     }
@@ -1443,6 +1523,7 @@ document.addEventListener('DOMContentLoaded', function() {
         buildingSelect.addEventListener('change', function() {
             const areaId = areaSelect.value;
             const buildingName = this.value;
+            const areaData = roomDataCache.get(areaId);
 
             // 重置后续选择器
             unitSelect.innerHTML = '<option value="">请选择单元</option>';
@@ -1453,8 +1534,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // 清空结果
             clearResults();
 
-            if (areaId && buildingName && window.roomData && window.roomData[areaId].buildings[buildingName]) {
-                const units = window.roomData[areaId].buildings[buildingName].units;
+            if (areaData && areaData.buildings && buildingName && areaData.buildings[buildingName]) {
+                const units = areaData.buildings[buildingName].units;
                 // 对单元名称进行数字排序
                 const sortedUnitNames = Object.keys(units).sort((a, b) => {
                     // 提取数字进行比较
@@ -1483,6 +1564,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const areaId = areaSelect.value;
             const buildingName = buildingSelect.value;
             const unitName = this.value;
+            const areaData = roomDataCache.get(areaId);
 
             // 重置房间选择器
             roomSelect.innerHTML = '<option value="">请选择房间</option>';
@@ -1491,8 +1573,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // 清空结果
             clearResults();
 
-            if (areaId && buildingName && unitName && window.roomData) {
-                const unit = window.roomData[areaId].buildings[buildingName].units[unitName];
+            if (
+                areaData &&
+                areaData.buildings &&
+                buildingName &&
+                unitName &&
+                areaData.buildings[buildingName] &&
+                areaData.buildings[buildingName].units
+            ) {
+                const unit = areaData.buildings[buildingName].units[unitName];
                 if (unit && unit.rooms) {
                     // 对房间号进行数字排序
                     const sortedRooms = unit.rooms.slice().sort((a, b) => {
@@ -1524,9 +1613,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const buildingName = buildingSelect.value;
             const unitName = unitSelect.value;
             const roomNumber = this.value;
+            const areaData = roomDataCache.get(areaId);
 
-            if (areaId && buildingName && unitName && roomNumber && window.roomData) {
-                const building = window.roomData[areaId].buildings[buildingName];
+            if (areaData && areaData.buildings && buildingName && unitName && roomNumber && areaData.buildings[buildingName]) {
+                const building = areaData.buildings[buildingName];
 
                 // 查找照明房间ID (支持所有照明相关的单元类型)
                 let lightUnit = null;

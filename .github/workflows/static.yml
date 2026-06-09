@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: "pages"
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -17,19 +17,19 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions: write-all
-    outputs:
-      changes: ${{ steps.check_changes.outputs.changes }}
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 2
+          persist-credentials: false
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
         with:
-          python-version: 3.14
+          python-version: '3.14'
           cache: 'pip'  # 启用依赖缓存，加速后续构建
 
       - name: Install dependencies
@@ -44,9 +44,16 @@ jobs:
             echo "📥 发现 page 分支，正在克隆..."
             # 克隆仓库（仅克隆最新版本）
             git clone --depth=1 --branch=page https://github.com/${{ github.repository }}.git /tmp/repo
-            # 复制 data 文件夹内容到目标目录
+            # 复制 page 分支持久化数据，保留 main 分支中的房间 JSON 分片
             if [ -d "/tmp/repo/data" ]; then
-              cp -r /tmp/repo/data/* ./page/data/
+              mkdir -p ./page/data
+              shopt -s dotglob nullglob
+              for item in /tmp/repo/data/*; do
+                if [ "$(basename "$item")" = "rooms" ]; then
+                  continue
+                fi
+                cp -r "$item" ./page/data/
+              done
               echo "✅ 已复制 page 分支的 data 文件夹内容"
             else
               echo "⚠️ page 分支中未找到 data 文件夹"
@@ -60,10 +67,11 @@ jobs:
       - name: Decrypt tokens.enc if exists
         env:
           PASSWORD: ${{ secrets.PASSWORD }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
         run: |
           if [ -f "./page/data/tokens.enc" ]; then
             echo "🔐 解密 tokens.enc ..."
-            python3 ./crypto.py decrypt || echo "⚠️ 解密失败但继续执行"
+            python3 ./crypto.py decrypt
           else
             echo "ℹ️ 未检测到加密文件，跳过解密步骤"
           fi
@@ -74,6 +82,7 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           LIGHT_ROOM: ${{ secrets.LIGHT_ROOM }}
           AC_ROOM: ${{ secrets.AC_ROOM }}
+          ZZU_DEVICE_ID: ${{ secrets.ZZU_DEVICE_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SERVERCHAN_KEYS: ${{ secrets.SERVERCHAN_KEY }},${{ secrets.SERVERCHAN_KEY2 }},${{ secrets.SERVERCHAN_KEY3 }}
@@ -87,6 +96,7 @@ jobs:
       - name: Encrypt tokens.json
         env:
           PASSWORD: ${{ secrets.PASSWORD }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
         run: |
           if [ -f "./page/data/tokens.json" ]; then
             echo "🔐 加密 tokens.json ..."
@@ -98,36 +108,36 @@ jobs:
           fi
 
       - name: git config
+        if: github.ref == 'refs/heads/main'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Commit changes
+        if: github.ref == 'refs/heads/main'
         run: |
           mkdir pages
-          cp -r ./page/data ./page/favicon.ico ./page/index.html ./page/style.css ./page/README.md  pages/
+          cp -r ./page/data ./page/favicon.ico ./page/index.html ./page/style.css ./page/main.js pages/
+          rm -f pages/data/tokens.json
           cd pages
           git init
           git add .
           git commit -m "⏱️ $(date +"%Y年%m月%d日-%H时%M分") GitHub Actions定时更新"
           git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:page
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Remove auth files from workspace and Pages artifact
+        if: always()
+        run: |
+          rm -f ./page/data/tokens.json ./page/data/tokens.enc
 
       - name: Upload artifact
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: './page'
   
-      - name: Delete Workflow Runs
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          retain_days: 30
-          keep_minimum_runs: 6
-
-
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     permissions:
       pages: write
@@ -140,15 +150,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-
-  keepalive-workflow:
-    name: Keepalive Workflow
-    if: ${{ always() }}
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Keep workflow active
-        uses: liskin/gh-workflow-keepalive@v1

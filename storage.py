@@ -1,8 +1,4 @@
-"""
-数据存储模块
-
-负责电量数据的持久化存储和管理
-"""
+"""电量数据存储模块，负责历史记录的持久化管理。"""
 import json
 import logging
 from datetime import datetime
@@ -18,28 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 def get_cst_time(fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
-    """
-    获取中国标准时间字符串
+    """获取中国标准时间字符串。
 
-    Args:
-        fmt: 时间格式
+    参数：
+        fmt: 时间格式。
 
-    Returns:
-        格式化的时间字符串
+    返回：
+        格式化后的时间字符串。
     """
     tz = pytz.timezone(TIMEZONE)
     return datetime.now(tz).strftime(fmt)
 
 
 def load_json(file_path: str) -> Optional[Union[List, Dict]]:
-    """
-    从 JSON 文件加载数据
+    """从 JSON 文件加载数据。
 
-    Args:
-        file_path: 文件路径
+    参数：
+        file_path: 文件路径。
 
-    Returns:
-        JSON 数据或 None
+    返回：
+        JSON 数据；读取失败时返回 None。
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -50,16 +44,15 @@ def load_json(file_path: str) -> Optional[Union[List, Dict]]:
 
 
 def save_json(data: Union[List, Dict], file_path: str, indent: int = 2) -> bool:
-    """
-    保存数据到 JSON 文件
+    """保存数据到 JSON 文件。
 
-    Args:
-        data: 要保存的数据
-        file_path: 文件路径
-        indent: 缩进空格数
+    参数：
+        data: 要保存的数据。
+        file_path: 文件路径。
+        indent: 缩进空格数。
 
-    Returns:
-        是否成功
+    返回：
+        是否保存成功。
     """
     try:
         dir_path = path.dirname(file_path)
@@ -77,14 +70,13 @@ def save_json(data: Union[List, Dict], file_path: str, indent: int = 2) -> bool:
 
 
 def record_energy_data(data: Dict) -> Optional[List[Dict]]:
-    """
-    记录电量数据到当月文件
+    """记录电量数据到当月文件。
 
-    Args:
-        data: 电量数据 {"time": "...", "light_Balance": ..., "ac_Balance": ...}
+    参数：
+        data: 电量数据，包含 time、light_Balance 和 ac_Balance。
 
-    Returns:
-        当月所有数据
+    返回：
+        当月所有电量记录。
     """
     month_str = get_cst_time("%Y-%m")
     file_path = path.join(DATA_DIR, f"{month_str}.json")
@@ -97,11 +89,10 @@ def record_energy_data(data: Dict) -> Optional[List[Dict]]:
 
 
 def update_time_list() -> List[str]:
-    """
-    更新时间列表文件
+    """更新时间列表文件。
 
-    Returns:
-        时间列表（按时间倒序）
+    返回：
+        按时间倒序排列的月份列表。
     """
     if not path.exists(DATA_DIR):
         raise FileNotFoundError(f"数据目录不存在: {DATA_DIR}")
@@ -127,11 +118,10 @@ def update_time_list() -> List[str]:
 
 
 def update_last_records(current_month_data: Optional[List[Dict]] = None) -> None:
-    """
-    更新最近 30 条记录文件
+    """更新最近 30 条记录文件。
 
-    Args:
-        current_month_data: 当月数据（可选）
+    参数：
+        current_month_data: 当月数据，可选。
     """
     time_list = update_time_list()
 
