@@ -108,6 +108,13 @@ class RetryingTokenCASClient(FailingTokenCASClient):
         self.user_token, self.refresh_token = self.tokens
 
 
+class SuccessfulTokenCASClient(FailingTokenCASClient):
+    def login(self):
+        self.login_calls += 1
+        self.logged_in = True
+        self.user_token, self.refresh_token = self.tokens
+
+
 class BootstrapMFA:
     def __init__(self, required):
         self.required = required
@@ -186,7 +193,7 @@ class AuthFlowTests(unittest.TestCase):
 
         self.assertEqual(monitor.cas_client.device_ids, ["configured-device"])
 
-    def test_saved_token_failure_tolerates_missing_mfa_state(self):
+    def test_saved_token_failure_does_not_precheck_mfa_state(self):
         monitor = self.make_monitor()
         monitor.cas_client = FailingTokenCASClient()
 
@@ -200,20 +207,24 @@ class AuthFlowTests(unittest.TestCase):
             monitor.cas_client.tokens,
             ("old-user-token", "old-refresh-token"),
         )
-        self.assertTrue(monitor.cas_client.mfa.checked)
+        self.assertFalse(monitor.cas_client.mfa.checked)
 
-    def test_saved_token_login_stops_when_mfa_is_required(self):
+    def test_saved_token_login_can_reuse_token_when_mfa_is_required(self):
         monitor = self.make_monitor()
-        monitor.cas_client = FailingTokenCASClient()
+        monitor.cas_client = SuccessfulTokenCASClient()
         monitor.cas_client.mfa.required = True
 
-        with self.assertRaises(MFARequiredError):
-            monitor._login_with_saved_token({
-                "user_token": "saved-user-token",
-                "refresh_token": "saved-refresh-token",
-            })
+        ok = monitor._login_with_saved_token({
+            "user_token": "saved-user-token",
+            "refresh_token": "saved-refresh-token",
+        })
 
-        self.assertEqual(monitor.cas_client.login_calls, 0)
+        self.assertTrue(ok)
+        self.assertEqual(monitor.cas_client.login_calls, 1)
+        self.assertEqual(
+            monitor.cas_client.tokens,
+            ("saved-user-token", "saved-refresh-token"),
+        )
 
     def test_saved_token_login_retries_after_mfa_state_detection(self):
         monitor = self.make_monitor()
@@ -226,7 +237,7 @@ class AuthFlowTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(monitor.cas_client.login_calls, 2)
-        self.assertTrue(monitor.cas_client.mfa.checked)
+        self.assertFalse(monitor.cas_client.mfa.checked)
         self.assertEqual(
             monitor.cas_client.tokens,
             ("saved-user-token", "saved-refresh-token"),

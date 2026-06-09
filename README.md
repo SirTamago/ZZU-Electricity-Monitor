@@ -18,7 +18,7 @@
 
 3.0 主要面向学校统一认证 MFA 变更、前端资源体积和上游可审查性：
 
-- **认证链路**：新增 `mfa.py`、`tokens.py`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，Actions 优先复用加密 token 与可信设备。
+- **认证链路**：新增 `mfa.py`、`tokens.py`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，Actions 优先复用加密 token；token 失效回退账密时再要求可信设备/MFA 就绪。
 - **失败闭合**：`tokens.enc` 存在但无法解密时，工作流会直接失败，避免静默回退到需要短信验证码的账密登录。
 - **前端资源**：移除内嵌大体积 `page/room.js`，改为 `page/data/rooms/*.json` 按区域懒加载。
 - **发布隔离**：工作流会在上传 Pages artifact 前移除 `tokens.json` 和 `tokens.enc`；只有 `main` 分支会写入 `page` 分支和部署 Pages。
@@ -140,7 +140,7 @@ git diff --check
 
 工作流会在上传 GitHub Pages artifact 前移除 `tokens.json` 和 `tokens.enc`，避免认证文件直接出现在部署出来的网站目录中；`page` 分支中的 `tokens.enc` 仅用于后续 Actions 读取和刷新。
 
-后续 Actions 会优先复用已加密保存的 token；如果 token 失效并回退到账密登录，而当前设备仍要求短信 MFA，脚本会停止并提示重新完成本地 MFA 初始化。
+后续 Actions 会优先复用已加密保存的 token；即使当前设备仍提示 MFA，也会先尝试 token 登录。只有 token 失效并需要回退到账密登录时，如果当前设备仍要求短信 MFA，脚本才会停止并提示重新完成本地 MFA 初始化。
 
 GitHub Actions 每次 runner 机器可能不同，但 ZZU.Py 传给统一认证的 `deviceId` 是稳定的：不设置时默认为 `ZZU.Py`，设置后使用 `ZZU_DEVICE_ID`。学校认证系统是否真正放行可信设备仍以统一认证 MFA 判断结果为准。
 

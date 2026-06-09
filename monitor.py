@@ -113,12 +113,11 @@ class EnergyMonitor:
             raise
 
     def _login_with_saved_token(self, token_data: Dict[str, str]) -> bool:
-        """尝试复用已保存的 token；按 ZZU.Py 要求先完成 MFA 状态检测。"""
+        """优先复用已保存的 token；只有回退账密时才要求 MFA 就绪。"""
         self.cas_client.set_token(
             token_data["user_token"],
             token_data["refresh_token"]
         )
-        self._ensure_mfa_ready()
         try:
             self.cas_client.login()
         except Exception as e:
