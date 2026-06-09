@@ -253,15 +253,14 @@ class AuthFlowTests(unittest.TestCase):
 
         save.assert_not_called()
 
-    def test_encryption_secret_prefers_independent_key(self):
-        with patch.object(crypto, "TOKEN_ENCRYPTION_KEY", "independent-key"):
-            with patch.object(crypto, "PASSWORD", "account-password"):
-                self.assertEqual(crypto.get_encryption_secret(), "independent-key")
+    def test_crypto_requires_password(self):
+        with patch.object(crypto, "PASSWORD", None):
+            with self.assertRaises(SystemExit) as exit_context:
+                with patch.object(sys, "argv", ["crypto.py", "encrypt"]):
+                    with patch("builtins.print"):
+                        crypto.main()
 
-    def test_encryption_secret_falls_back_to_password(self):
-        with patch.object(crypto, "TOKEN_ENCRYPTION_KEY", None):
-            with patch.object(crypto, "PASSWORD", "account-password"):
-                self.assertEqual(crypto.get_encryption_secret(), "account-password")
+        self.assertEqual(exit_context.exception.code, 1)
 
     def test_mfa_bootstrap_sends_sms_and_saves_token_when_required(self):
         fake_client = BootstrapCASClient("student-id", "password", mfa_required=True)

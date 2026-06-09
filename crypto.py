@@ -6,16 +6,11 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 
-from config import TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD, TOKEN_ENCRYPTION_KEY
+from config import TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD
 
 # 固定盐值（用于密钥派生）
 SALT = b"ZZU-Electricity-Monitor-Salt-v1"
 ITERATIONS = 100000
-
-
-def get_encryption_secret() -> str:
-    """优先使用独立 token 加密密钥，未配置时兼容旧版 PASSWORD。"""
-    return TOKEN_ENCRYPTION_KEY or PASSWORD
 
 
 def derive_key(password: str) -> bytes:
@@ -128,23 +123,22 @@ def main():
 
     command = sys.argv[1].lower()
 
-    encryption_secret = get_encryption_secret()
-    if not encryption_secret:
-        print("❌ 未设置 TOKEN_ENCRYPTION_KEY 或 PASSWORD 环境变量")
+    if not PASSWORD:
+        print("❌ 未设置 PASSWORD 环境变量")
         sys.exit(1)
 
     if command == "encrypt":
         if not os.path.exists(TOKEN_FILE):
             print(f"⚠️ 文件不存在: {TOKEN_FILE}")
             sys.exit(0)
-        success = encrypt_file(TOKEN_FILE, TOKEN_ENC_FILE, encryption_secret)
+        success = encrypt_file(TOKEN_FILE, TOKEN_ENC_FILE, PASSWORD)
         sys.exit(0 if success else 1)
 
     elif command == "decrypt":
         if not os.path.exists(TOKEN_ENC_FILE):
             print(f"⚠️ 文件不存在: {TOKEN_ENC_FILE}")
             sys.exit(0)
-        success = decrypt_file(TOKEN_ENC_FILE, TOKEN_FILE, encryption_secret)
+        success = decrypt_file(TOKEN_ENC_FILE, TOKEN_FILE, PASSWORD)
         sys.exit(0 if success else 1)
 
     else:

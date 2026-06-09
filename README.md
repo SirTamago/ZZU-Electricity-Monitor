@@ -18,7 +18,7 @@
 
 3.0 主要面向学校统一认证 MFA 变更、前端资源体积和上游可审查性：
 
-- **认证链路**：新增 `mfa.py`、`tokens.py`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，Actions 优先复用加密 token；token 失效回退账密时再要求可信设备/MFA 就绪。
+- **认证链路**：新增 `mfa.py`、`tokens.py`、`ZZU_DEVICE_ID`，Actions 优先复用加密 token；token 失效回退账密时再要求可信设备/MFA 就绪。
 - **失败闭合**：`tokens.enc` 存在但无法解密时，工作流会直接失败，避免静默回退到需要短信验证码的账密登录。
 - **前端资源**：移除内嵌大体积 `page/room.js`，改为 `page/data/rooms/*.json` 按区域懒加载。
 - **发布隔离**：工作流会在上传 Pages artifact 前移除 `tokens.json` 和 `tokens.enc`；只有 `main` 分支会写入 `page` 分支和部署 Pages。
@@ -40,7 +40,7 @@ git diff --check
 已经会用本项目的用户，可以只按这一版做：
 
 1. 更新依赖到 3.0 代码后，在 GitHub Secrets 配置 `ACCOUNT`、`PASSWORD`、`LIGHT_ROOM`、`AC_ROOM`。
-2. 推荐额外配置 `TOKEN_ENCRYPTION_KEY`，并保持本地和 GitHub Secrets 一致；需要固定可信设备时再配置 `ZZU_DEVICE_ID`。
+2. 需要固定可信设备时，额外配置 `ZZU_DEVICE_ID`，并保持本地和 GitHub Secrets 一致。
 3. 本地设置同一组环境变量后运行 `python mfa.py`，按提示输入短信验证码，生成 `page/data/tokens.json`。
 4. 运行 `python crypto.py encrypt`，生成 `page/data/tokens.enc`；不要提交 `tokens.json`。
 5. 将 `tokens.enc` 放到 `page` 分支的 `data/` 目录，用于后续 Actions 读取和刷新。
@@ -70,7 +70,6 @@ git diff --check
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `ZZU_DEVICE_ID` | 统一认证 MFA 可信设备 ID，不填则使用 ZZU.Py 默认 deviceId | 已在安全中心设为可信的 deviceId |
-| `TOKEN_ENCRYPTION_KEY` | `tokens.enc` 独立加密密钥，不填则兼容使用 `PASSWORD` | 建议使用长随机字符串 |
 
 **获取房间号：**
 
@@ -121,12 +120,12 @@ git diff --check
 
 推荐做法：
 
-1. 在本地设置 `ACCOUNT`、`PASSWORD`，建议设置稳定的 `ZZU_DEVICE_ID` 和长随机 `TOKEN_ENCRYPTION_KEY`
+1. 在本地设置 `ACCOUNT`、`PASSWORD`，建议设置稳定的 `ZZU_DEVICE_ID`
 2. 运行 `python mfa.py`
 3. 按提示输入短信验证码，生成 `page/data/tokens.json`
-4. 运行 `python crypto.py encrypt` 生成 `page/data/tokens.enc`；如已设置 `TOKEN_ENCRYPTION_KEY`，后续 Actions 也必须使用同一个值
+4. 运行 `python crypto.py encrypt` 生成 `page/data/tokens.enc`；该文件使用 `PASSWORD` 加密
 5. 将设备在统一认证安全中心设置为可信设备
-6. 将同一个 `ZZU_DEVICE_ID` 和 `TOKEN_ENCRYPTION_KEY` 配置到 GitHub Secrets；如果本地不设置 `ZZU_DEVICE_ID`，Actions 也会使用 ZZU.Py 默认 deviceId
+6. 将同一个 `ZZU_DEVICE_ID` 配置到 GitHub Secrets；如果本地不设置 `ZZU_DEVICE_ID`，Actions 也会使用 ZZU.Py 默认 deviceId
 
 首次启用 MFA 时，需要让工作流能读到 `tokens.enc`：
 
@@ -134,9 +133,9 @@ git diff --check
 - 如果只维护自己的私有 fork，可以临时强制添加 `page/data/tokens.enc` 到 `main` 并手动运行一次工作流；公开仓库不建议这样做，因为删除后历史记录中仍会保留该认证材料
 - 不要提交 `page/data/tokens.json`
 
-`tokens.enc` 虽然是加密文件，但仍是个人认证材料，默认已被 `.gitignore` 忽略。公开仓库的 `page` 分支密文仍可能被他人下载，因此建议使用独立的高强度 `TOKEN_ENCRYPTION_KEY`，不要只依赖统一认证密码。上游维护时不要接收 fork PR 中的个人 `tokens.enc`。
+`tokens.enc` 虽然是加密文件，但仍是个人认证材料，默认已被 `.gitignore` 忽略。公开仓库的 `page` 分支密文仍可能被他人下载；本项目使用 `PASSWORD` 作为加密密钥，上游维护时不要接收 fork PR 中的个人 `tokens.enc`。
 
-如果 `page` 分支中存在 `tokens.enc`，但 `TOKEN_ENCRYPTION_KEY` 或 `PASSWORD` 无法解密它，工作流会在解密步骤直接失败。此时请确认本地加密和 GitHub Secrets 使用的是同一个密钥，或重新运行 `python mfa.py` 与 `python crypto.py encrypt` 生成新的 `tokens.enc`。
+如果 `page` 分支中存在 `tokens.enc`，但当前 `PASSWORD` 无法解密它，工作流会在解密步骤直接失败。此时请确认本地加密和 GitHub Secrets 使用的是同一个 `PASSWORD`，或重新运行 `python mfa.py` 与 `python crypto.py encrypt` 生成新的 `tokens.enc`。
 
 工作流会在上传 GitHub Pages artifact 前移除 `tokens.json` 和 `tokens.enc`，避免认证文件直接出现在部署出来的网站目录中；`page` 分支中的 `tokens.enc` 仅用于后续 Actions 读取和刷新。
 
@@ -408,7 +407,7 @@ ZZU-Electricity-Monitor/
 
 常见原因及解决方法：
 
-1. **账号密码或 MFA 问题**：检查 `ACCOUNT`、`PASSWORD`、`ZZU_DEVICE_ID`、`TOKEN_ENCRYPTION_KEY`，必要时重新运行 `python mfa.py`
+1. **账号密码或 MFA 问题**：检查 `ACCOUNT`、`PASSWORD`、`ZZU_DEVICE_ID`，必要时重新运行 `python mfa.py`
 2. **房间号错误**：使用房间查询器重新获取正确的房间编号
 3. **网络问题**：GitHub Actions 偶尔会有网络波动，可以手动重新运行
 4. **page 分支不存在**：首次运行会自动创建，无需担心

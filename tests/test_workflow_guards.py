@@ -22,7 +22,8 @@ class WorkflowGuardTests(unittest.TestCase):
     def test_static_decrypt_step_fails_closed(self):
         step = workflow_step(read_workflow("static.yml"), "Decrypt tokens.enc if exists")
 
-        self.assertIn("TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}", step)
+        self.assertIn("PASSWORD: ${{ secrets.PASSWORD }}", step)
+        self.assertNotIn("TOKEN_ENCRYPTION_KEY", step)
         self.assertIn("python3 ./crypto.py decrypt", step)
         self.assertNotRegex(step, r"python3\s+\./crypto\.py\s+decrypt\s*\|\|")
 

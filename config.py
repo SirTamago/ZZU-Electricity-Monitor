@@ -37,9 +37,6 @@ AC_ROOM = os.getenv("AC_ROOM")
 # 统一认证 MFA 可信设备 ID，可选；不填使用 ZZU.Py 默认值。
 ZZU_DEVICE_ID = os.getenv("ZZU_DEVICE_ID")
 
-# tokens.enc 独立加密密钥，可选；不填兼容使用 PASSWORD。
-TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
-
 # 通知渠道配置
 
 # Telegram

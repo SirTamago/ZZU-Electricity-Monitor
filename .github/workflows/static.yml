@@ -67,7 +67,6 @@ jobs:
       - name: Decrypt tokens.enc if exists
         env:
           PASSWORD: ${{ secrets.PASSWORD }}
-          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
         run: |
           if [ -f "./page/data/tokens.enc" ]; then
             echo "🔐 解密 tokens.enc ..."
@@ -96,7 +95,6 @@ jobs:
       - name: Encrypt tokens.json
         env:
           PASSWORD: ${{ secrets.PASSWORD }}
-          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
         run: |
           if [ -f "./page/data/tokens.json" ]; then
             echo "🔐 加密 tokens.json ..."

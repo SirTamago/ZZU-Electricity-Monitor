@@ -8,7 +8,6 @@
 - 新增 `tokens.py`，让统一认证 token 持久化代码更直观。
 - 新增可选可信设备 ID：`ZZU_DEVICE_ID`。
 - 新增加密 token 持久化：`page/data/tokens.enc`。
-- 新增 `TOKEN_ENCRYPTION_KEY`，支持使用独立密钥加密 token，避免只依赖统一认证密码。
 - 新增 CI 与单元测试，覆盖认证流程、workflow 安全约束、房间 JSON 分片、JavaScript 语法和生成/认证文件检查。
 - 新增 PR 审查清单，覆盖 Secrets、workflow 权限、token 文件、房间数据和前端发布文件。
 
@@ -29,5 +28,5 @@
 ### 安全
 
 - `tokens.json` 和 `tokens.enc` 在 `main` 分支被忽略，并会在上传 Pages artifact 前移除。
-- 如果为了持久化把 `tokens.enc` 放在公开 `page` 分支，它仍可能被下载；请使用高强度随机 `TOKEN_ENCRYPTION_KEY`，不要向上游 PR 提交个人 token 文件。
+- 如果为了持久化把 `tokens.enc` 放在公开 `page` 分支，它仍可能被下载；加密密钥来自 `PASSWORD`，不要向上游 PR 提交个人 token 文件。
 - Fork PR 的 CI 不依赖真实 Secrets、真实 CAS 登录或 Pages 部署。
