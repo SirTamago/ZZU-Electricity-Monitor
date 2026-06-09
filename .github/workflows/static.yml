@@ -3,8 +3,8 @@ name: Update
 on:
   # 定时任务（默认禁用，取消注释即可启用）
   # GitHub Actions 定时可能有 10-60 分钟延迟
-  # schedule:
-  #   - cron: '0 16,20,0,4,8,12 * * *'  # UTC 时间，对应北京 0,4,8,12,16,20 点
+  schedule:
+    - cron: '0 16,20,0,4,8,12 * * *'  # UTC 时间，对应北京 0,4,8,12,16,20 点
   workflow_dispatch:
 
 concurrency:
